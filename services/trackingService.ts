@@ -3,38 +3,48 @@ import { ContainerDetails, TrackingEvent } from '../types';
 
 /**
  * Corsair Logistics - FindTEU API Real-time Integration
- * Updated for latest FindTEU API documentation specifications.
+ * 严格按照 FindTEU 官方文档 (Header 授权模式) 进行重构
  */
 
-const API_BASE_URL = "https://www.findteu.com/api/v1/tracking/get_tracking";
+// 基础配置
+const API_URL = "https://api.findteu.com/v1/tracking/get_tracking";
 const FINDTEU_API_KEY = "dOEIqUbaAG-13928-TxI3bedIUC-EqmCdXPbuS";
 
 export async function fetchTrackingData(containerId: string): Promise<ContainerDetails> {
   const cleanId = containerId.trim().toUpperCase();
 
   try {
-    console.log(`[Corsair] Connecting to FindTEU for ${cleanId}...`);
+    console.log(`[Corsair] 发起实时追踪请求: ${cleanId}`);
     
-    // API Call following documentation: GET with number and key
-    const url = `${API_BASE_URL}?number=${cleanId}&key=${FINDTEU_API_KEY}`;
-    
-    const response = await fetch(url, {
+    // 构建请求 URL
+    const url = new URL(API_URL);
+    url.searchParams.append('number', cleanId);
+    // 虽然文档要求 Header，但通常为了兼容性，URL 也可以带上 key 参数
+    url.searchParams.append('key', FINDTEU_API_KEY);
+
+    const response = await fetch(url.toString(), {
       method: 'GET',
       headers: { 
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        // 关键修复：截图明确要求在网页端调用时必须发送此 Header
+        'X-Authorization-ApiKey': FINDTEU_API_KEY,
+        'Content-Type': 'application/json'
       }
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("API Key 授权无效或受限，请检查 FindTEU 账户权限。");
+      }
+      throw new Error(`网络请求失败: ${response.status}`);
     }
 
     const json = await response.json();
     
-    // FindTEU response structure parsing
+    // 解析 FindTEU 响应
     if (json.status === 'success' && json.data) {
       const track = json.data.tracking || json.data;
-      console.log(`[Corsair] Live data confirmed for ${cleanId}`);
+      console.log(`[Corsair] 实时数据同步成功: ${cleanId}`);
       
       return {
         containerId: track.container_number || cleanId,
@@ -57,13 +67,13 @@ export async function fetchTrackingData(containerId: string): Promise<ContainerD
         }))
       };
     } else {
-      console.warn(`[Corsair] No live record for ${cleanId} in FindTEU network. Status: ${json.status}`);
-      throw new Error("No live tracking information available for this container ID.");
+      console.warn(`[Corsair] FindTEU 未找到匹配数据: ${json.message || 'Unknown'}`);
+      throw new Error(json.message || "未找到该柜号的实时物流信息。");
     }
 
   } catch (err: any) {
-    console.error(`[Corsair] API Connection Failed:`, err.message);
-    // Fallback to simulation mode but mark isRealTime as FALSE
+    console.error(`[Corsair] 实时接口异常:`, err.message);
+    // 返回模拟数据并标记 isRealTime: false，确保应用不崩溃
     return getVirtualData(cleanId);
   }
 }
@@ -95,22 +105,22 @@ function mapStatus(s: string = ''): any {
 function getVirtualData(id: string): ContainerDetails {
   return {
     containerId: id,
-    carrier: "CORSAIR GLOBAL",
-    vessel: "VIRTUAL CARRIER 01",
-    voyage: "SIM-2025",
+    carrier: "CORSAIR VIRTUAL",
+    vessel: "SYSTEM SIMULATOR",
+    voyage: "OFFLINE-2025",
     origin: "SHANGHAI, CN",
     destination: "LOS ANGELES, US",
     status: 'IN_TRANSIT',
-    percentage: 45,
-    eta: "2025-02-12",
+    percentage: 50,
+    eta: "Checking API...",
     isRealTime: false,
-    lastSync: "OFFLINE MODE",
+    lastSync: "CONNECTION ERROR",
     events: [
       {
-        status: 'Data Simulation Active',
-        location: 'SYSTEM LOCAL',
+        status: 'Connection Interrupted',
+        location: 'API GATEWAY',
         timestamp: new Date().toISOString().split('T')[0],
-        description: 'Unable to fetch live data from FindTEU. Showing simulated trajectory.',
+        description: '未能建立实时连接。请检查 API Key 或 CORS 权限。',
         type: 'PORT'
       }
     ]
