@@ -7,18 +7,21 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export async function getLogisticsInsights(data: ContainerDetails): Promise<AIInsight> {
   try {
+    const now = new Date().toDateString();
     const prompt = `
+      Current Date: ${now}
       Analyze the following shipping container data and provide professional logistics insights:
       Container: ${data.containerId}
       Carrier: ${data.carrier}
       Current Vessel: ${data.vessel}
       Route: ${data.origin} to ${data.destination}
       Current Status: ${data.status}
+      ETA: ${data.eta}
       Events: ${JSON.stringify(data.events)}
       
       Generate a structured JSON response with:
       1. A concise summary of the current situation.
-      2. A realistic ETA prediction based on the route.
+      2. A realistic ETA prediction based on the route and current date.
       3. A risk level (LOW, MEDIUM, HIGH).
       4. Three specific strategic recommendations for the consignee.
     `;
@@ -46,10 +49,10 @@ export async function getLogisticsInsights(data: ContainerDetails): Promise<AIIn
     return JSON.parse(response.text.trim()) as AIInsight;
   } catch (error) {
     console.error("Gemini Insight Error:", error);
-    // Fallback insight if AI fails
+    // Fallback insight if AI fails - using dynamic ETA reference
     return {
       summary: "Shipment is proceeding through standard transpacific transit corridors with no immediate anomalies detected.",
-      prediction: "On schedule for NOV 24 arrival, assuming stable weather conditions in the Pacific.",
+      prediction: `On schedule for ${data.eta} arrival, assuming stable weather conditions in the Pacific.`,
       riskLevel: "LOW",
       recommendations: [
         "Monitor port congestion levels at destination terminal.",
