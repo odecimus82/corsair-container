@@ -46,7 +46,12 @@ export async function getLogisticsInsights(data: ContainerDetails): Promise<AIIn
       }
     });
 
-    return JSON.parse(response.text.trim()) as AIInsight;
+    const text = response.text;
+    if (!text) {
+      throw new Error("Gemini returned empty response text");
+    }
+
+    return JSON.parse(text.trim()) as AIInsight;
   } catch (error) {
     console.error("Gemini Insight Error:", error);
     // Fallback insight if AI fails - using dynamic ETA reference
