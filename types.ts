@@ -18,6 +18,8 @@ export interface ContainerDetails {
   events: TrackingEvent[];
   eta: string;
   percentage: number;
+  isRealTime: boolean;
+  lastSync: string;
 }
 
 export interface SavedContainer {

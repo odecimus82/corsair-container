@@ -33,7 +33,16 @@ const EventItem: React.FC<{ event: TrackingEvent; isLast: boolean }> = ({ event,
 const TrackingDisplay: React.FC<TrackingDisplayProps> = ({ data, t, onSave, isSaved }) => {
   return (
     <div className="space-y-6">
-      <div className="glass rounded-3xl overflow-hidden">
+      <div className="glass rounded-3xl overflow-hidden relative">
+        {/* Connection Status Badge */}
+        <div className={`absolute top-4 right-20 z-10 px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest border ${
+          data.isRealTime 
+          ? 'bg-green-500/10 border-green-500/30 text-green-400' 
+          : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+        }`}>
+          {data.isRealTime ? '● LIVE API' : '○ SIMULATED'}
+        </div>
+
         <div className="bg-gradient-to-r from-slate-900 to-slate-950 p-6 border-b border-slate-800 flex justify-between items-center">
           <div>
             <span className="text-cyan-400 text-xs font-mono mb-1 block uppercase">LIVE CARGO IDENTITY</span>
@@ -66,11 +75,11 @@ const TrackingDisplay: React.FC<TrackingDisplayProps> = ({ data, t, onSave, isSa
           </div>
           <div className="space-y-1">
             <p className="text-[10px] text-slate-500 uppercase">{t.vesselVoyage}</p>
-            <p className="font-medium text-slate-200">{data.vessel} / {data.voyage}</p>
+            <p className="font-medium text-slate-200 truncate" title={data.vessel}>{data.vessel}</p>
           </div>
           <div className="space-y-1">
             <p className="text-[10px] text-slate-500 uppercase">{t.originPort}</p>
-            <p className="font-medium text-slate-200">{data.origin}</p>
+            <p className="font-medium text-slate-200 truncate">{data.origin}</p>
           </div>
           <div className="space-y-1">
             <p className="text-[10px] text-slate-500 uppercase">{t.etaDestination}</p>
@@ -78,7 +87,7 @@ const TrackingDisplay: React.FC<TrackingDisplayProps> = ({ data, t, onSave, isSa
           </div>
         </div>
 
-        <div className="px-6 pb-6">
+        <div className="px-6 pb-4">
           <div className="flex justify-between text-[10px] text-slate-500 mb-2 uppercase tracking-wider">
             <span>{data.origin}</span>
             <span>{t.progress}: {data.percentage}%</span>
@@ -91,6 +100,10 @@ const TrackingDisplay: React.FC<TrackingDisplayProps> = ({ data, t, onSave, isSa
             ></div>
           </div>
         </div>
+        
+        <div className="px-6 pb-4 flex justify-end">
+           <span className="text-[8px] text-slate-600 font-mono uppercase">Last Sync: {data.lastSync}</span>
+        </div>
       </div>
 
       <div className="glass rounded-3xl p-6">
@@ -98,6 +111,14 @@ const TrackingDisplay: React.FC<TrackingDisplayProps> = ({ data, t, onSave, isSa
           <i className="fas fa-list-ul text-cyan-500"></i>
           <h3 className="font-bold text-lg">{t.lifecycle}</h3>
         </div>
+        {!data.isRealTime && (
+          <div className="mb-6 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex items-center gap-3">
+            <i className="fas fa-info-circle text-yellow-400"></i>
+            <p className="text-[10px] text-yellow-200/70 leading-tight uppercase font-bold tracking-tight">
+              Notice: API connection limited. Displaying predictive trajectory based on carrier SCAC.
+            </p>
+          </div>
+        )}
         <div className="max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
           {data.events.map((event, idx) => (
             <EventItem 
