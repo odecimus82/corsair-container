@@ -1,0 +1,7 @@
+{
+  "name": "Corsair Global Logistics Command",
+  "description": "A high-tech container tracking dashboard for Corsair, featuring real-time vessel monitoring, AI-powered logistics insights via Gemini, and global shipment visibility using the FindTEU network.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
