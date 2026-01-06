@@ -2,7 +2,10 @@
 import { ContainerDetails, TrackingEvent } from '../types';
 
 /**
- * Corsair Logistics - FindTEU API Advanced Integration
+ * Corsair Logistics - FindTEU API Integration (Refined)
+ * 核心配置：
+ * 1. 使用截图中的 API Key
+ * 2. 严格遵循 Header: X-Authorization-ApiKey 要求
  */
 
 const FINDTEU_API_KEY = "dOEIqUbaAG-13928-TxI3bedIUC-EqmCdXPbuS";
@@ -12,40 +15,50 @@ export async function fetchTrackingData(containerId: string): Promise<ContainerD
   const cleanId = containerId.trim().toUpperCase();
 
   try {
-    console.log(`[Corsair] 发起 FindTEU 实时链路追踪: ${cleanId}`);
+    console.log(`[Corsair] 正在调取 FindTEU 全球数据库: ${cleanId}`);
     
+    // 构建请求参数
     const queryParams = new URLSearchParams({
       number: cleanId,
-      key: FINDTEU_API_KEY
+      key: FINDTEU_API_KEY // 冗余发送 key 以确保最高兼容性
     });
 
     const response = await fetch(`${BASE_URL}?${queryParams.toString()}`, {
       method: 'GET',
       headers: { 
         'Accept': 'application/json',
+        // 关键：这是截图明确要求的 Header 字段
         'X-Authorization-ApiKey': FINDTEU_API_KEY
       }
     });
 
     if (!response.ok) {
-      throw new Error(`FindTEU Gateway Error: ${response.status}`);
+      throw new Error(`FindTEU 接口响应异常: ${response.status}`);
     }
 
     const json = await response.json();
-    console.log("[Corsair] FindTEU 原始响应:", json);
+    console.log("[Corsair] FindTEU 实时原始数据:", json);
     
-    // 灵活解析: 支持 data 直接包含、data.tracking 包含、或 data.data 包含
-    const dataRoot = json.data || {};
-    const track = dataRoot.tracking || dataRoot.data || (dataRoot.container_number ? dataRoot : null);
-    
+    /**
+     * 智能数据探测：
+     * 有些版本数据在 json.data 内部，有些在 json.data.tracking，
+     * 甚至在 json.data 的数组第一个元素。
+     */
+    let track = null;
+    if (json.data) {
+      if (json.data.tracking) track = json.data.tracking;
+      else if (Array.isArray(json.data) && json.data.length > 0) track = json.data[0];
+      else if (json.data.container_number || json.data.carrier_name) track = json.data;
+    }
+
     if (json.status === 'success' && track) {
-      console.log("[Corsair] 成功定位到有效数据载荷:", track);
+      console.log("[Corsair] 成功提取数据轨迹:", track);
       
       const rawEvents = track.events || [];
       const events: TrackingEvent[] = rawEvents.map((e: any) => ({
-        status: e.status_description || e.status || "EVENT DETECTED",
+        status: e.status_description || e.status || "STATUS UPDATED",
         location: e.location || e.place || "IN TRANSIT",
-        timestamp: e.event_date || e.timestamp || e.date || "N/A",
+        timestamp: e.event_date || e.timestamp || "N/A",
         description: e.details || e.description || "",
         type: determineEventType(e.status || '')
       }));
@@ -65,12 +78,13 @@ export async function fetchTrackingData(containerId: string): Promise<ContainerD
         events: events
       };
     } else {
-      console.warn(`[Corsair] FindTEU 响应中未包含预期的集装箱结构:`, json);
-      throw new Error("该柜号暂无实时动态，或 API 权限受限。");
+      console.warn("[Corsair] FindTEU 返回了成功状态，但未找到匹配的柜号信息:", json);
+      throw new Error(json.message || "该集装箱在 FindTEU 网络中暂无最新轨迹。");
     }
 
   } catch (err: any) {
-    console.warn(`[Corsair] 实时接口异常，启动 CORS 安全降级模式:`, err.message);
+    console.warn(`[Corsair] 实时接口失败:`, err.message);
+    // 回退到模拟数据展示，防止 UI 崩溃
     return getVirtualData(cleanId, err.message);
   }
 }
@@ -79,22 +93,20 @@ function calculatePercentage(status: string = ''): number {
   const s = status.toLowerCase();
   if (s.includes('delivered') || s.includes('arrived')) return 100;
   if (s.includes('discharged')) return 90;
-  if (s.includes('transit') || s.includes('sea')) return 60;
-  if (s.includes('sailed') || s.includes('loaded')) return 35;
-  return 15;
+  if (s.includes('transit')) return 60;
+  return 20;
 }
 
 function determineEventType(status: string): 'SEA' | 'LAND' | 'PORT' {
   const s = status.toLowerCase();
   if (s.includes('vessel') || s.includes('sea') || s.includes('sailed')) return 'SEA';
-  if (s.includes('gate') || s.includes('truck') || s.includes('rail')) return 'LAND';
+  if (s.includes('gate') || s.includes('truck')) return 'LAND';
   return 'PORT';
 }
 
 function mapStatus(s: string = ''): any {
   const status = s.toUpperCase();
-  if (status.includes('TRANSIT') || status.includes('BOARD') || status.includes('SAILED')) return 'IN_TRANSIT';
-  if (status.includes('GATE') || status.includes('LAND')) return 'GATE_IN';
+  if (status.includes('TRANSIT') || status.includes('BOARD')) return 'IN_TRANSIT';
   if (status.includes('ARRIV') || status.includes('DISCH')) return 'ARRIVED';
   return 'IN_TRANSIT';
 }
@@ -102,22 +114,22 @@ function mapStatus(s: string = ''): any {
 function getVirtualData(id: string, reason: string): ContainerDetails {
   return {
     containerId: id,
-    carrier: "CORSAIR VIRTUAL NETWORK",
+    carrier: "CORSAIR SYSTEM",
     vessel: "ANALYZING...",
     voyage: "OFFLINE",
-    origin: "SCANNING PORTS...",
-    destination: "PENDING API",
+    origin: "SCANNING...",
+    destination: "PENDING",
     status: 'IN_TRANSIT',
-    percentage: 10,
+    percentage: 5,
     eta: "Syncing...",
     isRealTime: false,
     lastSync: "CONNECTION ERROR",
     events: [
       {
-        status: 'Interface Error',
-        location: 'SYSTEM GATEWAY',
+        status: 'API 解析受阻',
+        location: 'BROWSER GATEWAY',
         timestamp: new Date().toISOString().split('T')[0],
-        description: `API 响应解析失败: ${reason}。请确认 FindTEU 后台已允许当前域名的跨域访问。`,
+        description: `原因: ${reason}。建议: 检查浏览器 CORS 限制或联系 FindTEU 客服。`,
         type: 'PORT'
       }
     ]
